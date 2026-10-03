@@ -1,0 +1,76 @@
+import { apiWxLogin, apiRegister, apiPasswordLogin } from '../apis/index.js';
+import { getToken, clearToken } from './request.js';
+
+const USER_INFO_KEY = 'userInfo';
+
+/** 是否已登录（本地有 token 即视为已登录；token 失效由 401 兜底清除） */
+export function isLoggedIn() {
+	return !!getToken();
+}
+
+/** 本地缓存的用户信息：{ userId, nickname, phone }，游客返回 null */
+export function getUserInfo() {
+	try {
+		return uni.getStorageSync(USER_INFO_KEY) || null;
+	} catch (e) {
+		return null;
+	}
+}
+
+/**
+ * 微信一键登录（仅小程序端可用）：
+ * wx.login 静默拿 code → 后端 jscode2session 换 openid → 签发 token。
+ * @returns {Promise<object>} 登录返回 { token, userId, nickname, phone }
+ */
+export function wxLogin() {
+	return new Promise((resolve, reject) => {
+		uni.login({
+			provider: 'weixin',
+			success: async (res) => {
+				if (!res.code) {
+					reject(new Error('未获取到微信 code'));
+					return;
+				}
+				try {
+					const data = await apiWxLogin(res.code);
+					saveLogin(data);
+					resolve(data);
+				} catch (e) {
+					reject(e);
+				}
+			},
+			fail: (err) => reject(err)
+		});
+	});
+}
+
+/** 手机号 + 密码登录 */
+export function passwordLogin(phone, password) {
+	return apiPasswordLogin(phone, password).then((data) => {
+		saveLogin(data);
+		return data;
+	});
+}
+
+/** 手机号注册（成功即登录） */
+export function register(phone, password, nickname) {
+	return apiRegister(phone, password, nickname || '').then((data) => {
+		saveLogin(data);
+		return data;
+	});
+}
+
+/** 退出登录：清掉本地登录态，回到游客身份 */
+export function logout() {
+	clearToken();
+}
+
+function saveLogin(data) {
+	uni.setStorageSync('token', data.token);
+	uni.setStorageSync('userId', data.userId);
+	uni.setStorageSync(USER_INFO_KEY, {
+		userId: data.userId,
+		nickname: data.nickname || '',
+		phone: data.phone || ''
+	});
+}
