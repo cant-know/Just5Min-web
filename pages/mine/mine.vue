@@ -51,6 +51,7 @@
 				</view>
 
 				<button class="btn ghost" @click="goWrong">查看错题本</button>
+				<button class="btn ghost" @click="goSwitchAccount">切换账号</button>
 				<button class="btn ghost danger" @click="confirmLogout">退出登录</button>
 			</block>
 		</block>
@@ -60,6 +61,7 @@
 			<view class="guest-title">你正在以游客身份浏览</view>
 			<view class="guest-desc">登录后可保存答题记录、错题本与学习统计</view>
 			<button class="btn primary" @click="openLogin">微信 / 手机号登录</button>
+			<button v-if="savedCount > 0" class="btn ghost" @click="goSwitchAccount">切换账号</button>
 		</view>
 
 		<login-popup :visible="loginVisible" @success="onLoginSuccess" @close="onLoginClose" />
@@ -69,7 +71,14 @@
 <script setup>
 	import LoginPopup from '../../components/login-popup/login-popup.vue';
 	import { getUserStats, getUserProfile } from '../../apis/index.js';
-	import { isLoggedIn, getUserInfo, updateUserInfoCache, logout } from '../../utils/auth.js';
+	import {
+		isLoggedIn,
+		getUserInfo,
+		updateUserInfoCache,
+		logout,
+		rememberCurrentAccount,
+		getSavedAccounts
+	} from '../../utils/auth.js';
 	import { useLoginGate } from '../../utils/login-gate.js';
 	import { onShow } from '@dcloudio/uni-app';
 	import { ref, reactive, computed } from 'vue';
@@ -80,6 +89,8 @@
 	const loggedIn = ref(false);
 	const userInfo = ref(null);
 	const profile = ref(null);
+	/** 本机记住的可切换账号数（游客态下也展示「切换账号」入口） */
+	const savedCount = ref(0);
 	const stats = reactive({
 		totalAnswered: 0,
 		totalCorrect: 0,
@@ -135,6 +146,7 @@
 	}
 
 	async function load() {
+		savedCount.value = getSavedAccounts().length;
 		if (!isLoggedIn()) {
 			loggedIn.value = false;
 			userInfo.value = null;
@@ -145,6 +157,9 @@
 		}
 		loggedIn.value = true;
 		userInfo.value = getUserInfo();
+		// 兼容老用户：把当前登录态记入「可切换账号」列表（已存在则刷新其昵称/头像/token）
+		rememberCurrentAccount();
+		savedCount.value = getSavedAccounts().length;
 		loading.value = true;
 		try {
 			// 资料与统计一起拉：资料接口的返回值用来覆盖本地缓存，避免编辑后显示旧昵称/头像
@@ -192,6 +207,10 @@
 	function goWrong() {
 		// 错题本已从 tabBar 移除，改为普通页面跳转
 		uni.navigateTo({ url: '/pages/wrong/wrong' });
+	}
+
+	function goSwitchAccount() {
+		uni.navigateTo({ url: '/pages/switch-account/switch-account' });
 	}
 
 	function confirmLogout() {

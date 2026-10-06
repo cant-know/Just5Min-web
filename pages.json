@@ -90,6 +90,12 @@
 			"style": {
 				"navigationBarTitleText": "编辑资料"
 			}
+		},
+		{
+			"path": "pages/switch-account/switch-account",
+			"style": {
+				"navigationBarTitleText": "切换账号"
+			}
 		}
 	],
 	"tabBar": {
