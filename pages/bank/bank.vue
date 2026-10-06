@@ -26,7 +26,7 @@
 					v-for="item in searchResults"
 					:key="item.id"
 					class="result-item"
-					@click="goQuiz(item)"
+					@click="goPractice(item)"
 				>
 					<view class="result-main">
 						<view class="result-name">{{ item.name }}</view>
@@ -63,7 +63,7 @@
 								v-for="leaf in group.items"
 								:key="leaf.id"
 								class="leaf-card"
-								@click="goQuiz(leaf)"
+								@click="goPractice(leaf)"
 							>
 								<view class="leaf-name">{{ leaf.name }}</view>
 								<view class="leaf-count">{{ leaf.questionCount }} 题</view>
@@ -73,19 +73,13 @@
 				</block>
 			</scroll-view>
 		</view>
-
-		<login-popup :visible="loginVisible" @success="onLoginSuccess" @close="onLoginClose" />
 	</view>
 </template>
 
 <script setup>
-	import LoginPopup from '../../components/login-popup/login-popup.vue';
 	import { getCategoryTree, searchCategories } from '../../apis/index.js';
-	import { useLoginGate } from '../../utils/login-gate.js';
 	import { onShow } from '@dcloudio/uni-app';
 	import { ref, computed } from 'vue';
-
-	const { visible: loginVisible, requireLogin, handleSuccess, handleClose } = useLoginGate();
 
 	const tree = ref([]);
 	const activeId = ref(0);
@@ -125,8 +119,12 @@
 
 	const isSearching = computed(() => keyword.value.trim().length > 0);
 
-	async function loadTree() {
-		loading.value = true;
+	/**
+	 * 拉取分类树。
+	 * @param {boolean} silent 静默刷新：不显示"加载中"骨架，用于 onShow 回页时更新题数
+	 */
+	async function loadTree(silent = false) {
+		if (!silent) loading.value = true;
 		try {
 			// 分类树是只读接口，游客也能拉取；不做登录拦截
 			const data = await getCategoryTree();
@@ -139,7 +137,7 @@
 		} catch (e) {
 			// 错误提示已在 request 层统一处理
 		} finally {
-			loading.value = false;
+			if (!silent) loading.value = false;
 			loaded.value = true;
 		}
 	}
@@ -180,26 +178,18 @@
 		searching.value = false;
 	}
 
-	/** 点击题目分类：未登录先弹登录，登录成功后自动进入刷题 */
-	function goQuiz(item) {
-		requireLogin(() => {
-			uni.navigateTo({
-				url: `/pages/quiz/quiz?categoryId=${item.id}&name=${encodeURIComponent(item.name)}`
-			});
+	/** 点击分类：进入分类练习主页（游客可浏览；具体练习/个人数据再引导登录） */
+	function goPractice(item) {
+		uni.navigateTo({
+			url: `/pages/practice/practice?categoryId=${item.id}` +
+				`&name=${encodeURIComponent(item.name)}&count=${item.questionCount || 0}`
 		});
 	}
 
-	function onLoginSuccess() {
-		handleSuccess();
-	}
-
-	function onLoginClose() {
-		handleClose();
-	}
-
 	onShow(() => {
-		// tabBar 页面会频繁 onShow，树数据只拉一次
-		if (!loaded.value) loadTree();
+		// 每次回到题库页都刷新分类树（首次带骨架，之后静默），
+		// 否则后台新增题目后，页面上每个分类的题数会一直停留在旧值。
+		loadTree(loaded.value);
 	});
 </script>
 

@@ -1,7 +1,7 @@
 <template>
 	<view class="page">
 		<view v-if="loading" class="tip">加载中…</view>
-		<view v-else-if="questions.length === 0" class="tip">这里还没有题目{{ mode === 'wrong' ? '，先去刷几道题吧' : '' }}</view>
+		<view v-else-if="questions.length === 0" class="tip">{{ emptyText }}</view>
 
 		<block v-else>
 			<!-- 进度 -->
@@ -10,7 +10,12 @@
 					<text class="cur">{{ index + 1 }}</text>
 					<text class="sep"> / {{ questions.length }}</text>
 				</view>
-				<view class="type-tag">{{ current.questionType === 2 ? '多选题' : '单选题' }}</view>
+				<view class="row-right">
+					<view class="type-tag">{{ current.questionType === 2 ? '多选题' : '单选题' }}</view>
+					<view class="fav-btn" :class="{ on: favorited }" @click="toggleFavorite">
+						{{ favorited ? '★' : '☆' }}
+					</view>
+				</view>
 			</view>
 			<view class="progress-bar">
 				<view class="progress-inner" :style="{ width: ((index + 1) / questions.length * 100) + '%' }"></view>
@@ -60,7 +65,14 @@
 
 <script setup>
 	import LoginPopup from '../../components/login-popup/login-popup.vue';
-	import { getQuestions, getWrongQuestions, submitAnswer } from '../../apis/index.js';
+	import {
+		getQuestions,
+		getWrongQuestions,
+		getFavorites,
+		addFavorite,
+		removeFavorite,
+		submitAnswer
+	} from '../../apis/index.js';
 	import { useLoginGate } from '../../utils/login-gate.js';
 	import { onLoad } from '@dcloudio/uni-app';
 	import { ref, reactive, computed } from 'vue';
@@ -78,27 +90,80 @@
 	const categoryId = ref(0);
 	const name = ref('');
 	const mode = ref('normal');
+	// 出题顺序：asc=顺序练习，random=随机抽题（默认）
+	const order = ref('random');
 	const stats = reactive({ total: 0, correct: 0 });
+	// 当前题的收藏态（游客从 null 归一为 false，点收藏才引导登录）
+	const favorited = ref(false);
 
 	const current = computed(() => questions.value[index.value] || {});
 	const isLast = computed(() => index.value >= questions.value.length - 1);
 
+	const emptyText = computed(() => {
+		if (mode.value === 'wrong') return '本分类还没有错题，先去刷几道题吧';
+		if (mode.value === 'favorite') return '本分类还没有收藏的题目，刷题时点☆收藏吧';
+		return '这里还没有题目';
+	});
+
+	function syncFavorited() {
+		favorited.value = !!current.value.favorited;
+	}
+
 	async function init() {
 		loading.value = true;
 		try {
+			const params = categoryId.value > 0 ? { categoryId: categoryId.value } : {};
 			// 题目列表是只读接口，游客也能看；提交答案时才要求登录
 			if (mode.value === 'wrong') {
-				const params = categoryId.value > 0 ? { categoryId: categoryId.value } : {};
 				const list = await getWrongQuestions(params);
 				questions.value = list.map((it) => it.question).filter(Boolean);
+			} else if (mode.value === 'favorite') {
+				const list = await getFavorites(params);
+				questions.value = list.map((it) => it.question).filter(Boolean);
 			} else {
-				questions.value = await getQuestions({ categoryId: categoryId.value, limit: 10, order: 'random' });
+				// 顺序练习：拉整个分类的题目，按题库顺序做完整套；
+				// 随机模式仍只取 10 道，用于快速刷题
+				questions.value = await getQuestions({
+					categoryId: categoryId.value,
+					limit: order.value === 'asc' ? 200 : 10,
+					order: order.value
+				});
 			}
 			uni.setNavigationBarTitle({ title: name.value || '刷题' });
+			syncFavorited();
 		} catch (e) {
 			questions.value = [];
 		} finally {
 			loading.value = false;
+		}
+	}
+
+	/** 收藏 / 取消收藏当前题（未登录先弹登录，登录成功后补执行） */
+	function toggleFavorite() {
+		const questionId = current.value.id;
+		if (!questionId) return;
+		const next = !favorited.value;
+		requireLogin(() => doToggleFavorite(questionId, next));
+	}
+
+	async function doToggleFavorite(questionId, next) {
+		try {
+			if (next) {
+				await addFavorite(questionId);
+			} else {
+				await removeFavorite(questionId);
+			}
+			favorited.value = next;
+			// 同步回题目对象，翻页返回时状态不丢
+			if (current.value && current.value.id === questionId) {
+				current.value.favorited = next;
+			}
+			uni.showToast({ title: next ? '已收藏' : '已取消收藏', icon: 'none', duration: 800 });
+		} catch (e) {
+			// token 失效时重新走登录门禁；其余错误已在 request 层提示
+			if (e && e.needLogin) {
+				requireLogin(() => doToggleFavorite(questionId, next));
+			}
 		}
 	}
 
@@ -172,14 +237,16 @@
 		selected.value = [];
 		submitted.value = false;
 		result.value = null;
+		syncFavorited();
 	}
 
 	onLoad((options) => {
 		categoryId.value = Number(options.categoryId || 0);
 		name.value = decodeURIComponent(options.name || '');
 		mode.value = options.mode || 'normal';
-		// 记录本次练习入口，供首页「继续上次练习」使用（错题本模式不算）
-		if (mode.value !== 'wrong' && categoryId.value > 0) {
+		order.value = options.order === 'asc' ? 'asc' : 'random';
+		// 记录本次练习入口，供首页「继续上次练习」使用（错题/收藏重做不算）
+		if (mode.value === 'normal' && categoryId.value > 0) {
 			uni.setStorageSync('lastQuiz', { categoryId: categoryId.value, name: name.value });
 		}
 		init();
@@ -224,6 +291,27 @@
 		background-color: #EAF1FF;
 		border-radius: 999rpx;
 		padding: 6rpx 20rpx;
+	}
+
+	.row-right {
+		display: flex;
+		align-items: center;
+	}
+
+	.fav-btn {
+		margin-left: 18rpx;
+		width: 60rpx;
+		height: 60rpx;
+		line-height: 58rpx;
+		text-align: center;
+		font-size: 34rpx;
+		color: #B4B9C2;
+		background-color: #FFFFFF;
+		border-radius: 50%;
+	}
+
+	.fav-btn.on {
+		color: #F5A623;
 	}
 
 	.progress-bar {

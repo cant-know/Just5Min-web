@@ -41,7 +41,7 @@
 	import { getWrongQuestions, removeWrongQuestion } from '../../apis/index.js';
 	import { isLoggedIn } from '../../utils/auth.js';
 	import { useLoginGate } from '../../utils/login-gate.js';
-	import { onShow } from '@dcloudio/uni-app';
+	import { onLoad, onShow } from '@dcloudio/uni-app';
 	import { ref } from 'vue';
 
 	const { visible: loginVisible, requireLogin, handleSuccess, handleClose } = useLoginGate();
@@ -49,6 +49,10 @@
 	const loading = ref(true);
 	const list = ref([]);
 	const loggedIn = ref(false);
+
+	// 从练习主页进来时带分类，只看该分类错题；从「我的」进来则为全部
+	const categoryId = ref(0);
+	const name = ref('');
 
 	async function load() {
 		// 错题本属于个人数据，游客不请求接口，直接展示引导
@@ -61,7 +65,7 @@
 		loggedIn.value = true;
 		loading.value = true;
 		try {
-			list.value = await getWrongQuestions({});
+			list.value = await getWrongQuestions(categoryId.value > 0 ? { categoryId: categoryId.value } : {});
 		} catch (e) {
 			list.value = [];
 		} finally {
@@ -87,7 +91,10 @@
 	}
 
 	function redoAll() {
-		uni.navigateTo({ url: '/pages/quiz/quiz?mode=wrong&name=' + encodeURIComponent('错题重做') });
+		uni.navigateTo({
+			url: `/pages/quiz/quiz?mode=wrong&categoryId=${categoryId.value}&name=` +
+				encodeURIComponent(name.value ? `${name.value} · 错题重做` : '错题重做')
+		});
 	}
 
 	function redoOne(item) {
@@ -113,6 +120,14 @@
 			}
 		});
 	}
+
+	onLoad((options) => {
+		categoryId.value = Number(options.categoryId || 0);
+		name.value = decodeURIComponent(options.name || '');
+		uni.setNavigationBarTitle({
+			title: name.value ? `我的错题 · ${name.value}` : '错题本'
+		});
+	});
 
 	onShow(() => {
 		load();

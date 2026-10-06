@@ -47,6 +47,17 @@ export const removeWrongQuestion = (questionId) => del('/api/wrong-questions/' +
 /** 学习统计 */
 export const getUserStats = () => get('/api/user/stats');
 
+/* ==================== 收藏（需登录） ==================== */
+
+/** 收藏列表，categoryId 可选（不传=全部） */
+export const getFavorites = (params) => get('/api/favorites', params || {});
+
+/** 收藏题目（幂等） */
+export const addFavorite = (questionId) => post('/api/favorites/' + questionId, {});
+
+/** 取消收藏 */
+export const removeFavorite = (questionId) => del('/api/favorites/' + questionId);
+
 /* ==================== 积分商城（分类/商品游客可读，兑换需登录） ==================== */
 
 /** 商城一级分类 */
@@ -61,3 +72,14 @@ export const exchangeProduct = (productId) => post('/api/mall/exchange', { produ
 
 /** 我的兑换记录（需登录） */
 export const getExchangeRecords = () => get('/api/mall/exchanges');
+
+/* ==================== 每日打卡（需登录） ==================== */
+
+/**
+ * 打卡概览：累计/连续天数、今日是否已打卡
+ * @param {string} [month] 可选，yyyy-MM，返回该月已打卡日期供月历标记
+ */
+export const getCheckInSummary = (month) => get('/api/checkins', month ? { month } : {});
+
+/** 每日打卡（每日一次，+10 积分；重复打卡返回 1005） */
+export const doCheckIn = () => post('/api/checkins', {});

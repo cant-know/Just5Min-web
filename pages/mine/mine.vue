@@ -160,7 +160,8 @@
 	}
 
 	function goWrong() {
-		uni.switchTab({ url: '/pages/wrong/wrong' });
+		// 错题本已从 tabBar 移除，改为普通页面跳转
+		uni.navigateTo({ url: '/pages/wrong/wrong' });
 	}
 
 	function confirmLogout() {

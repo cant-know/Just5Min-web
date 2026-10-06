@@ -3,13 +3,26 @@
 		{
 			"path": "pages/index/index",
 			"style": {
-				"navigationBarTitleText": "刷题5分钟"
+				"navigationBarTitleText": "刷题5分钟",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/checkin/checkin",
+			"style": {
+				"navigationBarTitleText": "不断电学习挑战"
 			}
 		},
 		{
 			"path": "pages/bank/bank",
 			"style": {
 				"navigationBarTitleText": "题库"
+			}
+		},
+		{
+			"path": "pages/practice/practice",
+			"style": {
+				"navigationBarTitleText": "练习"
 			}
 		},
 		{
@@ -43,6 +56,12 @@
 			}
 		},
 		{
+			"path": "pages/favorites/favorites",
+			"style": {
+				"navigationBarTitleText": "我的收藏"
+			}
+		},
+		{
 			"path": "pages/mine/mine",
 			"style": {
 				"navigationBarTitleText": "我的"
@@ -66,10 +85,6 @@
 			{
 				"pagePath": "pages/mall/mall",
 				"text": "商城"
-			},
-			{
-				"pagePath": "pages/wrong/wrong",
-				"text": "错题本"
 			},
 			{
 				"pagePath": "pages/mine/mine",
