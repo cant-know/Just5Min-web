@@ -68,6 +68,7 @@ const request = (options) => {
 
 export const get = (url, data) => request({ url, data, method: 'GET' });
 export const post = (url, data) => request({ url, data, method: 'POST' });
+export const put = (url, data) => request({ url, data, method: 'PUT' });
 export const del = (url, data) => request({ url, data, method: 'DELETE' });
 
 export default request;

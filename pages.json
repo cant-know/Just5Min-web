@@ -66,6 +66,30 @@
 			"style": {
 				"navigationBarTitleText": "我的"
 			}
+		},
+		{
+			"path": "pages/friend/friend",
+			"style": {
+				"navigationBarTitleText": "好友"
+			}
+		},
+		{
+			"path": "pages/friend-search/friend-search",
+			"style": {
+				"navigationBarTitleText": "添加好友"
+			}
+		},
+		{
+			"path": "pages/friend-requests/friend-requests",
+			"style": {
+				"navigationBarTitleText": "好友请求"
+			}
+		},
+		{
+			"path": "pages/profile/profile",
+			"style": {
+				"navigationBarTitleText": "编辑资料"
+			}
 		}
 	],
 	"tabBar": {
@@ -76,19 +100,33 @@
 		"list": [
 			{
 				"pagePath": "pages/index/index",
-				"text": "首页"
+				"text": "首页",
+				"iconPath": "static/tabbar/home.png",
+				"selectedIconPath": "static/tabbar/home-active.png"
 			},
 			{
 				"pagePath": "pages/bank/bank",
-				"text": "题库"
+				"text": "题库",
+				"iconPath": "static/tabbar/bank.png",
+				"selectedIconPath": "static/tabbar/bank-active.png"
 			},
 			{
 				"pagePath": "pages/mall/mall",
-				"text": "商城"
+				"text": "商城",
+				"iconPath": "static/tabbar/mall.png",
+				"selectedIconPath": "static/tabbar/mall-active.png"
+			},
+			{
+				"pagePath": "pages/friend/friend",
+				"text": "好友",
+				"iconPath": "static/tabbar/friend.png",
+				"selectedIconPath": "static/tabbar/friend-active.png"
 			},
 			{
 				"pagePath": "pages/mine/mine",
-				"text": "我的"
+				"text": "我的",
+				"iconPath": "static/tabbar/mine.png",
+				"selectedIconPath": "static/tabbar/mine-active.png"
 			}
 		]
 	},

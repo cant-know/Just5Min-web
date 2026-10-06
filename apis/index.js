@@ -1,4 +1,4 @@
-import { get, post, del } from '../utils/request.js';
+import { get, post, put, del } from '../utils/request.js';
 
 /* ==================== 登录 / 注册 ==================== */
 
@@ -46,6 +46,50 @@ export const removeWrongQuestion = (questionId) => del('/api/wrong-questions/' +
 
 /** 学习统计 */
 export const getUserStats = () => get('/api/user/stats');
+
+/** 我的资料（含昵称/头像/积分，需登录） */
+export const getUserProfile = () => get('/api/user/profile');
+
+/**
+ * 编辑资料（需登录）
+ * @param {{nickname?:string, avatarUrl?:string}} data 只传要改的字段
+ * @returns {Promise<{userId:number,nickname:string,phone:string,avatarUrl:string,points:number}>}
+ */
+export const updateProfile = (data) => put('/api/user/profile', data);
+
+/* ==================== 好友（全部需登录） ==================== */
+
+/**
+ * 好友列表（含对方学习数据：答题数/正确率/打卡天数/积分）
+ * @param {{limit?:number, offset?:number}} [params] limit 默认 50，上限 50
+ */
+export const getFriendList = (params) => get('/api/friends', params || {});
+
+/** 删除好友（双向） */
+export const removeFriend = (friendId) => del('/api/friends/' + friendId);
+
+/**
+ * 搜索用户：用户ID / 手机号 精确，昵称 模糊
+ * @returns {Promise<Array<{userId:number,nickname:string,avatarUrl:string,relation:string}>>}
+ *          relation: none | pending_out | pending_in | friend | self
+ */
+export const searchFriends = (keyword) => get('/api/friends/search', { keyword });
+
+/** 我收到的待处理好友请求 */
+export const getFriendRequests = () => get('/api/friends/requests');
+
+/** 待处理好友请求数量（tabBar 角标） */
+export const getFriendRequestCount = () => get('/api/friends/requests/count');
+
+/** 发送好友请求 */
+export const sendFriendRequest = (toUserId, message) =>
+	post('/api/friends/requests', message ? { toUserId, message } : { toUserId });
+
+/** 同意好友请求 */
+export const acceptFriendRequest = (id) => post('/api/friends/requests/' + id + '/accept', {});
+
+/** 拒绝好友请求 */
+export const rejectFriendRequest = (id) => post('/api/friends/requests/' + id + '/reject', {});
 
 /* ==================== 收藏（需登录） ==================== */
 

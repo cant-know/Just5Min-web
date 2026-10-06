@@ -8,13 +8,28 @@ export function isLoggedIn() {
 	return !!getToken();
 }
 
-/** 本地缓存的用户信息：{ userId, nickname, phone }，游客返回 null */
+/**
+ * 本地缓存的用户信息：{ userId, nickname, phone, avatarUrl }，游客返回 null。
+ * 注意：这里只是「首屏兜底」，「我的」页会用 /api/user/profile 的返回值覆盖它（避免缓存过期）。
+ */
 export function getUserInfo() {
 	try {
 		return uni.getStorageSync(USER_INFO_KEY) || null;
 	} catch (e) {
 		return null;
 	}
+}
+
+/**
+ * 合并更新本地用户信息缓存（编辑资料保存成功后调用）。
+ * 这样从编辑页返回「我的」页时，onShow 立刻就能拿到新昵称/头像。
+ * @param {{userId?:number, nickname?:string, phone?:string, avatarUrl?:string}} partial
+ */
+export function updateUserInfoCache(partial) {
+	const current = getUserInfo() || {};
+	const next = Object.assign({}, current, partial || {});
+	uni.setStorageSync(USER_INFO_KEY, next);
+	return next;
 }
 
 /**
@@ -71,6 +86,8 @@ function saveLogin(data) {
 	uni.setStorageSync(USER_INFO_KEY, {
 		userId: data.userId,
 		nickname: data.nickname || '',
-		phone: data.phone || ''
+		phone: data.phone || '',
+		// 登录接口现在会回传头像（Base64 DataURL），没有则为空串
+		avatarUrl: data.avatarUrl || ''
 	});
 }

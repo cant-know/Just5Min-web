@@ -1,12 +1,14 @@
 <template>
 	<view class="page">
 		<view class="profile">
-			<view class="avatar" :class="{ guest: !loggedIn }">{{ avatarText }}</view>
+			<image v-if="avatarUrl" class="avatar img" :src="avatarUrl" mode="aspectFill" />
+			<view v-else class="avatar" :class="{ guest: !loggedIn }">{{ avatarText }}</view>
 			<view class="profile-info">
 				<view class="nick">{{ nickname }}</view>
 				<view class="uid">{{ subtitle }}</view>
 			</view>
-			<button v-if="!loggedIn" class="mini-btn" @click="openLogin">登录</button>
+			<button v-if="loggedIn" class="mini-btn ghost" @click="goProfile">编辑资料</button>
+			<button v-else class="mini-btn" @click="openLogin">登录</button>
 		</view>
 
 		<!-- 已登录：积分 + 学习统计 -->
@@ -66,8 +68,8 @@
 
 <script setup>
 	import LoginPopup from '../../components/login-popup/login-popup.vue';
-	import { getUserStats } from '../../apis/index.js';
-	import { isLoggedIn, getUserInfo, logout } from '../../utils/auth.js';
+	import { getUserStats, getUserProfile } from '../../apis/index.js';
+	import { isLoggedIn, getUserInfo, updateUserInfoCache, logout } from '../../utils/auth.js';
 	import { useLoginGate } from '../../utils/login-gate.js';
 	import { onShow } from '@dcloudio/uni-app';
 	import { ref, reactive, computed } from 'vue';
@@ -77,6 +79,7 @@
 	const loading = ref(true);
 	const loggedIn = ref(false);
 	const userInfo = ref(null);
+	const profile = ref(null);
 	const stats = reactive({
 		totalAnswered: 0,
 		totalCorrect: 0,
@@ -86,20 +89,30 @@
 		perCategory: []
 	});
 
+	/** 头像：优先用接口返回，其次本地缓存 */
+	const avatarUrl = computed(() => {
+		if (!loggedIn.value) return '';
+		const fromApi = profile.value && profile.value.avatarUrl;
+		if (fromApi) return fromApi;
+		return (userInfo.value && userInfo.value.avatarUrl) || '';
+	});
+
 	const avatarText = computed(() => {
 		if (!loggedIn.value) return '游';
-		const nick = (userInfo.value && userInfo.value.nickname) || '';
+		const nick = nickname.value || '';
 		return nick ? nick.slice(0, 1) : '我';
 	});
 
 	const nickname = computed(() => {
 		if (!loggedIn.value) return '游客';
+		const fromApi = profile.value && profile.value.nickname;
+		if (fromApi) return fromApi;
 		return (userInfo.value && userInfo.value.nickname) || '微信用户';
 	});
 
 	const subtitle = computed(() => {
 		if (!loggedIn.value) return '登录后保存学习记录';
-		const u = userInfo.value || {};
+		const u = profile.value || userInfo.value || {};
 		if (u.phone) return '手机号：' + u.phone;
 		return 'ID：' + (u.userId || '-');
 	});
@@ -125,6 +138,7 @@
 		if (!isLoggedIn()) {
 			loggedIn.value = false;
 			userInfo.value = null;
+			profile.value = null;
 			resetStats();
 			loading.value = false;
 			return;
@@ -133,13 +147,23 @@
 		userInfo.value = getUserInfo();
 		loading.value = true;
 		try {
-			const data = await getUserStats();
-			Object.assign(stats, data);
+			// 资料与统计一起拉：资料接口的返回值用来覆盖本地缓存，避免编辑后显示旧昵称/头像
+			const [prof, st] = await Promise.all([getUserProfile(), getUserStats()]);
+			profile.value = prof;
+			Object.assign(stats, st);
+			updateUserInfoCache({
+				userId: prof.userId,
+				nickname: prof.nickname || '',
+				phone: prof.phone || '',
+				avatarUrl: prof.avatarUrl || ''
+			});
+			userInfo.value = getUserInfo();
 		} catch (e) {
 			// token 失效（401）时退回游客态，由用户重新登录
 			if (e && e.needLogin) {
 				loggedIn.value = false;
 				userInfo.value = null;
+				profile.value = null;
 				resetStats();
 			}
 		} finally {
@@ -157,6 +181,12 @@
 
 	function onLoginClose() {
 		handleClose();
+	}
+
+	function goProfile() {
+		requireLogin(() => {
+			uni.navigateTo({ url: '/pages/profile/profile' });
+		});
 	}
 
 	function goWrong() {
@@ -213,6 +243,12 @@
 		flex-shrink: 0;
 	}
 
+	/* 有头像图片时用 image 渲染，文字圆作兜底 */
+	.avatar.img {
+		display: block;
+		background-color: #F2F4F7;
+	}
+
 	.avatar.guest {
 		background-color: #C4C9D2;
 	}
@@ -226,6 +262,9 @@
 		font-size: 32rpx;
 		font-weight: 600;
 		color: #1A1A1A;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.uid {
@@ -246,6 +285,12 @@
 		font-weight: 600;
 		border-radius: 999rpx;
 		border: none;
+	}
+
+	.mini-btn.ghost {
+		background-color: #FFFFFF;
+		color: #3C7BFF;
+		border: 2rpx solid #B9CDF7;
 	}
 
 	.mini-btn::after {
