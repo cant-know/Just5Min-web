@@ -36,7 +36,13 @@
 			<view v-if="loading" class="tip">加载中…</view>
 			<view v-else-if="friends.length === 0" class="empty">还没有好友，点上方「添加好友」找找研友吧</view>
 			<view v-else class="list">
-				<view v-for="item in friends" :key="item.userId" class="item" @longpress="confirmRemove(item)">
+				<view
+					v-for="item in friends"
+					:key="item.userId"
+					class="item"
+					@click="openChat(item)"
+					@longpress="confirmRemove(item)"
+				>
 					<image v-if="item.avatarUrl" class="avatar img" :src="item.avatarUrl" mode="aspectFill" />
 					<view v-else class="avatar">{{ initial(item.nickname) }}</view>
 					<view class="item-main">
@@ -49,10 +55,11 @@
 						<view class="item-points">{{ item.points || 0 }}</view>
 						<view class="item-points-label">积分</view>
 					</view>
+					<view class="chevron">›</view>
 				</view>
 				<view v-if="hasMore" class="more" @click="loadMore">加载更多</view>
 			</view>
-			<view v-if="friends.length" class="hint">长按好友可删除</view>
+			<view v-if="friends.length" class="hint">点击好友进入聊天 · 长按可删除</view>
 		</block>
 
 		<login-popup :visible="loginVisible" @success="onLoginSuccess" @close="onLoginClose" />
@@ -157,6 +164,21 @@
 
 	function goRequests() {
 		uni.navigateTo({ url: '/pages/friend-requests/friend-requests' });
+	}
+
+	/** 点好友进聊天页（仿微信）；昵称/头像随路由传过去，避免首屏空白 */
+	function openChat(item) {
+		const name = encodeURIComponent(item.nickname || '好友');
+		const avatar = encodeURIComponent(item.avatarUrl || '');
+		uni.navigateTo({
+			url:
+				'/pages/chat/chat?friendId=' +
+				item.userId +
+				'&name=' +
+				name +
+				'&avatar=' +
+				avatar
+		});
 	}
 
 	function confirmRemove(item) {
@@ -358,6 +380,14 @@
 	.item-points-label {
 		font-size: 20rpx;
 		color: #A6ABB5;
+	}
+
+	.item .chevron {
+		flex-shrink: 0;
+		margin-left: 12rpx;
+		font-size: 32rpx;
+		color: #C4C9D2;
+		line-height: 1;
 	}
 
 	.more {

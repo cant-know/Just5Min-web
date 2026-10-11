@@ -16,7 +16,7 @@
 			>{{ loggedIn ? '兑换记录 ›' : '去登录' }}</view>
 		</view>
 
-		<!-- 一级分类横滑 -->
+		<!-- 商品分类横滑 -->
 		<scroll-view class="cat-scroll" scroll-x :show-scrollbar="false">
 			<view class="cat-list">
 				<view
@@ -35,26 +35,29 @@
 		</scroll-view>
 
 		<!-- 商品列表 -->
-		<scroll-view class="goods-scroll" scroll-y>
+		<scroll-view class="list-scroll" scroll-y>
 			<view v-if="loading" class="empty">加载中...</view>
 			<view v-else-if="products.length === 0" class="empty">该分类暂无商品</view>
-			<view v-else class="goods-list">
-				<view v-for="p in products" :key="p.id" class="goods-card">
-					<view class="goods-icon">{{ categoryIcon(p.categoryId) }}</view>
-					<view class="goods-main">
-						<view class="goods-name">{{ p.name }}</view>
-						<view class="goods-desc">{{ p.description || '虚拟商品，兑换后见兑换记录' }}</view>
-						<view class="goods-meta">
-							<text class="goods-price">{{ p.price }} 积分</text>
-							<text class="goods-stock" :class="{ out: p.stock <= 0 }">剩余 {{ p.stock }}</text>
+			<view v-else class="list">
+				<view v-for="p in products" :key="p.id" class="card">
+					<view class="card-main">
+						<view class="card-head">
+							<view class="kind">{{ categoryName(p.categoryId) }}</view>
+							<view class="stock">剩余 {{ p.stock }}</view>
+						</view>
+						<view class="card-name">{{ p.name }}</view>
+						<view v-if="p.description" class="card-desc">{{ p.description }}</view>
+						<view class="card-foot">
+							<view class="price">
+								<text v-if="p.price > 0" class="price-num">{{ p.price }}</text>
+								<text v-else class="price-free">免费</text>
+								<text class="price-unit">{{ p.price > 0 ? '积分' : '' }}</text>
+							</view>
+							<view class="exchange-btn" :class="{ disabled: !canAfford(p) }" @click.stop="onExchange(p)">
+								{{ canAfford(p) ? '立即兑换' : '积分不足' }}
+							</view>
 						</view>
 					</view>
-					<button
-						class="exchange-btn"
-						:class="{ disabled: p.stock <= 0 }"
-						:disabled="p.stock <= 0"
-						@click="onExchangeClick(p)"
-					>{{ p.stock <= 0 ? '已兑完' : '兑换' }}</button>
 				</view>
 			</view>
 			<view class="bottom-placeholder"></view>
@@ -70,7 +73,7 @@ import { getMallCategories, getMallProducts, exchangeProduct, getUserStats } fro
 import { isLoggedIn } from '../../utils/auth.js';
 import { useLoginGate } from '../../utils/login-gate.js';
 import { onLoad, onShow } from '@dcloudio/uni-app';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 const { visible: loginVisible, requireLogin, handleSuccess, handleClose } = useLoginGate();
 
@@ -81,9 +84,24 @@ const products = ref([]);
 const activeCategoryId = ref(0);
 const loading = ref(true);
 
-const CATEGORY_ICONS = { 1: '👑', 2: '📚', 3: '🎬', 4: '🛠' };
-function categoryIcon(categoryId) {
-	return CATEGORY_ICONS[categoryId] || '🎁';
+/** 分类 id → 名称映射（列表项展示所属分类） */
+const categoryMap = computed(() => {
+	const map = {};
+	categories.value.forEach((c) => {
+		map[c.id] = c.name;
+	});
+	return map;
+});
+
+function categoryName(id) {
+	return categoryMap.value[id] || '商品';
+}
+
+/** 积分够不够（游客视为不够，点按钮会先引导登录） */
+function canAfford(p) {
+	if (!loggedIn.value) return true;
+	const price = p.price || 0;
+	return price <= 0 || points.value >= price;
 }
 
 async function loadIdentity() {
@@ -111,14 +129,14 @@ async function loadCategories() {
 	}
 }
 
-async function loadProducts() {
-	loading.value = true;
+async function loadProducts(silent = false) {
+	if (!silent) loading.value = true;
 	try {
 		products.value = await getMallProducts(activeCategoryId.value || undefined);
 	} catch (e) {
 		products.value = [];
 	} finally {
-		loading.value = false;
+		if (!silent) loading.value = false;
 	}
 }
 
@@ -128,31 +146,50 @@ function switchCategory(id) {
 	loadProducts();
 }
 
-function onExchangeClick(product) {
-	requireLogin(() => confirmExchange(product));
-}
-
-function confirmExchange(product) {
-	uni.showModal({
-		title: '确认兑换',
-		content: `将消耗 ${product.price} 积分兑换「${product.name}」，确定吗？`,
-		confirmText: '兑换',
-		success: (res) => {
-			if (res.confirm) doExchange(product);
-		}
+/** 兑换：未登录先弹登录，成功后自动补执行；已登录弹确认框 */
+function onExchange(product) {
+	requireLogin(() => {
+		const isFree = !product.price || product.price <= 0;
+		uni.showModal({
+			title: '确认兑换',
+			content: isFree
+				? `确认领取「${product.name}」？`
+				: `将消耗 ${product.price} 积分兑换「${product.name}」`,
+			success: (res) => {
+				if (!res.confirm) return;
+				doExchange(product);
+			}
+		});
 	});
 }
 
 async function doExchange(product) {
 	try {
-		const res = await exchangeProduct(product.id);
-		points.value = res.pointsBalance;
-		uni.showToast({ title: '兑换成功', icon: 'success' });
-		loadProducts();
+		const result = await exchangeProduct(product.id);
+		// 用返回余额覆盖本地，避免多一次请求
+		if (result && typeof result.pointsBalance === 'number') {
+			points.value = result.pointsBalance;
+		}
+		uni.showToast({
+			title: (product.price || 0) > 0 ? '兑换成功' : '领取成功',
+			icon: 'success'
+		});
+		// 与商品关联的资料：直接跳文章详情阅读
+		if (result && result.articleId) {
+			setTimeout(() => {
+				uni.navigateTo({ url: '/pages/article/article?id=' + result.articleId });
+			}, 600);
+		} else {
+			loadProducts(true);
+		}
 	} catch (e) {
-		// 1003 积分不足 / 1004 库存不足已由 request 层 toast；刷新库存与余额兜底
-		loadProducts();
-		loadIdentity();
+		// 积分不足 / 库存不足等错误已在 request 层提示，这里补刷余额
+		if (e && e.needLogin) {
+			loggedIn.value = false;
+			points.value = 0;
+		} else {
+			loadIdentity();
+		}
 	}
 }
 
@@ -166,7 +203,6 @@ function openLogin() {
 function onLoginSuccess() {
 	handleSuccess();
 	loadIdentity();
-	loadProducts();
 }
 function onLoginClose() {
 	handleClose();
@@ -178,7 +214,8 @@ onLoad(() => {
 });
 onShow(() => {
 	loadIdentity();
-	// 登录态可能刚变化，商品列表的按钮状态随 loggedIn 刷新即可，无需重拉
+	// tabBar 页不重建：每次回来都静默刷新商品与余额
+	loadProducts(products.value.length > 0);
 });
 </script>
 
@@ -224,7 +261,7 @@ onShow(() => {
 	border-radius: 999rpx;
 }
 
-/* 一级分类横滑 */
+/* 分类横滑 */
 .cat-scroll {
 	margin-top: 22rpx;
 	padding: 0 24rpx;
@@ -252,87 +289,99 @@ onShow(() => {
 }
 
 /* 商品列表 */
-.goods-scroll {
+.list-scroll {
 	flex: 1;
 	min-height: 0;
 	margin-top: 22rpx;
 	padding: 0 24rpx;
 	box-sizing: border-box;
 }
-.goods-list {
+.list {
 	display: flex;
 	flex-direction: column;
 	gap: 20rpx;
 }
-.goods-card {
+.card {
 	background: #ffffff;
 	border-radius: 20rpx;
-	padding: 28rpx 30rpx;
-	display: flex;
-	align-items: center;
+	padding: 30rpx 30rpx 26rpx;
 	box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04);
 }
-.goods-icon {
-	width: 88rpx;
-	height: 88rpx;
-	border-radius: 18rpx;
-	background: #f2f5fc;
+.card-head {
 	display: flex;
 	align-items: center;
-	justify-content: center;
-	font-size: 44rpx;
-	flex-shrink: 0;
+	justify-content: space-between;
 }
-.goods-main {
-	flex: 1;
-	min-width: 0;
-	margin: 0 22rpx;
+.kind {
+	font-size: 22rpx;
+	color: #3c7bff;
+	background: #eaf1ff;
+	border-radius: 999rpx;
+	padding: 4rpx 18rpx;
 }
-.goods-name {
-	font-size: 29rpx;
-	font-weight: 600;
-	color: #2a2f3a;
+.stock {
+	font-size: 22rpx;
+	color: #a6abb5;
 }
-.goods-desc {
-	margin-top: 6rpx;
-	font-size: 23rpx;
+.card-name {
+	margin-top: 18rpx;
+	font-size: 32rpx;
+	font-weight: 700;
+	color: #1a1a1a;
+	line-height: 1.45;
+}
+.card-desc {
+	margin-top: 12rpx;
+	font-size: 25rpx;
 	color: #8a8f99;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	line-height: 1.6;
 }
-.goods-meta {
-	margin-top: 10rpx;
+.card-foot {
+	margin-top: 22rpx;
 	display: flex;
 	align-items: center;
-	gap: 18rpx;
+	justify-content: space-between;
 }
-.goods-price {
-	font-size: 26rpx;
+.price {
+	display: flex;
+	align-items: baseline;
+}
+.price-num {
+	font-size: 40rpx;
 	font-weight: 700;
 	color: #ff7a1a;
+	line-height: 1;
 }
-.goods-stock {
+.price-free {
+	font-size: 32rpx;
+	font-weight: 700;
+	color: #19b36b;
+	line-height: 1;
+}
+.price-unit {
+	margin-left: 6rpx;
 	font-size: 22rpx;
-	color: #8a8f99;
-}
-.goods-stock.out {
-	color: #f5453f;
+	color: #a6abb5;
 }
 .exchange-btn {
-	margin: 0;
 	flex-shrink: 0;
+	min-width: 168rpx;
+	height: 68rpx;
+	line-height: 68rpx;
+	text-align: center;
+	padding: 0 28rpx;
+	border-radius: 999rpx;
 	background: #3c7bff;
 	color: #ffffff;
-	font-size: 25rpx;
-	padding: 0 30rpx;
-	height: 64rpx;
-	line-height: 64rpx;
-	border-radius: 999rpx;
+	font-size: 26rpx;
+	font-weight: 600;
+}
+.exchange-btn:active {
+	opacity: 0.85;
 }
 .exchange-btn.disabled {
-	background: #c9cdd6;
-	color: #ffffff;
+	background: #dfe4ec;
+	color: #98a0ad;
 }
 
 .empty {

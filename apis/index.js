@@ -91,6 +91,29 @@ export const acceptFriendRequest = (id) => post('/api/friends/requests/' + id + 
 /** 拒绝好友请求 */
 export const rejectFriendRequest = (id) => post('/api/friends/requests/' + id + '/reject', {});
 
+/* ==================== 好友私信聊天（需登录，仅限好友） ==================== */
+
+/**
+ * 与某好友的聊天记录（按时间正序，最后一条最新；进会话后对方的未读会被置已读）
+ * @param {number} friendId 对方用户ID
+ * @param {{beforeId?:number, limit?:number}} [params] beforeId 翻页游标（上一页最旧一条的 id）
+ * @returns {Promise<Array<{id,fromUserId,toUserId,content,mine,read,createdAt}>>} mine=true 表示我发的（靠右）
+ */
+export const getMessages = (friendId, params) =>
+	get('/api/messages', Object.assign({ friendId }, params || {}));
+
+/**
+ * 发送消息（仅好友之间；非好友返回 1012，自己发给自己返回 1013）
+ * @returns {Promise<{id,fromUserId,toUserId,content,mine,read,createdAt}>} 落库后的消息
+ */
+export const sendMessage = (toUserId, content) => post('/api/messages', { toUserId, content });
+
+/**
+ * 会话列表：每个聊过天的好友一条，含最后一条消息与对方发来的未读数
+ * @returns {Promise<Array<{userId,nickname,avatarUrl,lastContent,lastMine,lastTime,unreadCount}>>}
+ */
+export const getChatSessions = () => get('/api/messages/sessions');
+
 /* ==================== 收藏（需登录） ==================== */
 
 /** 收藏列表，categoryId 可选（不传=全部） */
@@ -102,16 +125,32 @@ export const addFavorite = (questionId) => post('/api/favorites/' + questionId, 
 /** 取消收藏 */
 export const removeFavorite = (questionId) => del('/api/favorites/' + questionId);
 
-/* ==================== 积分商城（分类/商品游客可读，兑换需登录） ==================== */
+/* ==================== 学习资料专栏（游客可读） ==================== */
 
-/** 商城一级分类 */
+/**
+ * 资料列表（不含正文），categoryId 可选
+ * @returns {Promise<Array<{id,categoryId,categoryName,title,summary,tags,tagList,readCount,createdAt}>>}
+ */
+export const getArticles = (categoryId) =>
+	get('/api/articles', categoryId ? { categoryId } : {});
+
+/** 资料详情（含正文 content），同时累加阅读量 */
+export const getArticle = (id) => get('/api/articles/' + id);
+
+/* ==================== 积分商城（分类/商品列表游客可读，兑换需登录） ==================== */
+
+/** 商品分类（商城页 chips 用；文章专栏页也复用它做筛选） */
 export const getMallCategories = () => get('/api/mall/categories');
 
 /** 商品列表，categoryId 可选（不传=全部） */
 export const getMallProducts = (categoryId) =>
 	get('/api/mall/products', categoryId ? { categoryId } : {});
 
-/** 兑换商品（需登录），返回 { recordId, productId, productName, pointsCost, pointsBalance } */
+/**
+ * 兑换商品（需登录）。
+ * 免费商品（price=0）不扣积分且幂等；付费商品扣库存扣积分。
+ * @returns {Promise<{recordId,productId,productName,articleId,pointsCost,pointsBalance}>}
+ */
 export const exchangeProduct = (productId) => post('/api/mall/exchange', { productId });
 
 /** 我的兑换记录（需登录） */

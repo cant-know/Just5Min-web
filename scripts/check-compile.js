@@ -79,20 +79,29 @@ function stripJsonComments(src) {
 	return out;
 }
 
-const DEFAULT_FILES = [
-	'pages/mine/mine.vue',
-	'pages/profile/profile.vue',
-	'pages/friend/friend.vue',
-	'pages/friend-search/friend-search.vue',
-	'pages/friend-requests/friend-requests.vue',
-	'App.vue',
-	'apis/index.js',
-	'utils/request.js',
-	'utils/auth.js',
-	'utils/avatar.js',
-];
+/** 递归收集目录下所有 .vue 文件（相对 ROOT 的 posix 路径） */
+function collectVueFiles(dir) {
+	const results = [];
+	for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+		const abs = path.join(dir, entry.name);
+		if (entry.isDirectory()) {
+			results.push(...collectVueFiles(abs));
+		} else if (entry.name.endsWith('.vue')) {
+			results.push(path.relative(ROOT, abs).split(path.sep).join('/'));
+		}
+	}
+	return results;
+}
 
-const targets = process.argv.length > 2 ? process.argv.slice(2) : DEFAULT_FILES;
+/** 无参数时：全量校验 pages/ 下所有 .vue + 指定的 .js + pages.json */
+function collectDefaultFiles() {
+	const jsFiles = ['App.vue', 'apis/index.js', 'utils/request.js', 'utils/auth.js', 'utils/avatar.js', 'utils/markdown.js'];
+	const vueFiles = collectVueFiles(path.join(ROOT, 'pages'));
+	const components = collectVueFiles(path.join(ROOT, 'components'));
+	return [...vueFiles, ...components, ...jsFiles].filter((f) => fs.existsSync(path.resolve(ROOT, f)));
+}
+
+const targets = process.argv.length > 2 ? process.argv.slice(2) : collectDefaultFiles();
 
 let failed = 0;
 

@@ -96,6 +96,24 @@
 			"style": {
 				"navigationBarTitleText": "切换账号"
 			}
+		},
+		{
+			"path": "pages/article/article",
+			"style": {
+				"navigationBarTitleText": "学习资料"
+			}
+		},
+		{
+			"path": "pages/articles/articles",
+			"style": {
+				"navigationBarTitleText": "文章专栏"
+			}
+		},
+		{
+			"path": "pages/chat/chat",
+			"style": {
+				"navigationBarTitleText": "聊天"
+			}
 		}
 	],
 	"tabBar": {
